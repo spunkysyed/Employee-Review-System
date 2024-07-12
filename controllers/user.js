@@ -1,3 +1,4 @@
+import passport, { generateToken } from '../config/passport-local-strategy.js';
 import User from '../models/user.js';
 
 // Render the Signin Page
@@ -35,7 +36,16 @@ export const create = async (req, res) => {
 
 // Sign in and create the session for the user
 export const createSession = (req, res) => {
-  return res.redirect('/');
+  passport.authenticate('local', { session: false }, (err, user, info) => {
+    if (err || !user) {
+      req.flash('error', 'Invalid username/password');
+      return res.redirect('/users/Signin');
+    }
+
+    const token = generateToken(user);
+    res.cookie('jwt', token, { httpOnly: true });
+    return res.redirect('/');
+  })(req, res);
 };
 
 export const destroySession = (req, res) => {
@@ -44,7 +54,8 @@ export const destroySession = (req, res) => {
       console.log('Error while signing out');
       return res.redirect('back');
     }
-
+    res.clearCookie('jwt');
+    req.flash('success', 'Signed out successfully');
     return res.redirect('/users/Signin');
   });
 };
