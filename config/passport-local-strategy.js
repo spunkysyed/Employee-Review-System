@@ -1,8 +1,15 @@
 import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
+import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
+import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
+import dotenv from 'dotenv';
 
-// Authentication using Passport
+dotenv.config();
+
+const JWT_SECRET = process.env.SECRET_KEY; // You should store this in an environment variable
+
+// Local strategy for username and password authentication
 passport.use(new LocalStrategy(
   {
     usernameField: 'email',
@@ -24,6 +31,27 @@ passport.use(new LocalStrategy(
   }
 ));
 
+// JWT strategy for token authentication
+passport.use(new JwtStrategy(
+  {
+    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    secretOrKey: JWT_SECRET
+  },
+  async function (jwtPayload, done) {
+    try {
+      let user = await User.findById(jwtPayload.id);
+      console.log(user)
+      if (!user) {
+        return done(null, false);
+      }
+      return done(null, user);
+    } catch (error) {
+      console.log('Error in finding the user with JWT:', error);
+      return done(error, false);
+    }
+  }
+));
+
 // Serializing the user to decide which key is to be kept in the cookies
 passport.serializeUser(function (user, done) {
   done(null, user.id);
@@ -41,6 +69,12 @@ passport.deserializeUser(function (id, done) {
     });
 });
 
+// Generate JWT token
+export const generateToken = (user) => {
+  return jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+};
+
+// Middleware to check if the User is authenticated
 // Check if the User is authenticated
 passport.checkAuthentication = function (req, res, next) {
   // If the user is signed in then pass on the request to the next function (Controller's action)
@@ -53,7 +87,6 @@ passport.checkAuthentication = function (req, res, next) {
 
 // Middleware to set authenticated user in locals
 passport.setAuthenticatedUser = function (req, res, next) {
-  // req.user contains the current signed in user from the session cookies and we are sending this to the locals for the views
   if (req.isAuthenticated()) {
     res.locals.user = req.user;
   }
